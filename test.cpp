@@ -23,7 +23,7 @@ int main(int argc, char** argv)
     std::cerr << ex.what() << std::endl;
     return 0;
   }
-  if (argc > 2 && std::strcmp(argv[2], "--output"))
-    json::JsonParser::PrettyPrint(std::cout, result);
+  if (argc > 2 && !std::strcmp(argv[2], "--output"))
+    json::JsonParser::PrettyPrint(result);
   return 0;
 }

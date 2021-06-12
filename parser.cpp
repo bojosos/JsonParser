@@ -49,8 +49,9 @@ namespace json
     if (peek.rfind("false", 0) == 0)
     {
       Node* boolean = new Node();
-      boolean->m_Type = NodeType::Boolean;
-      boolean->m_Data.boolean = false;
+      m_AllocatedNodes.push_back(boolean);
+      boolean->type = NodeType::Boolean;
+      boolean->data.boolean = false;
       m_Lexer.skipChars(5);
       return boolean;
     }
@@ -58,8 +59,9 @@ namespace json
     if (peek.rfind("true", 0) == 0)
     {
       Node* boolean = new Node();
-      boolean->m_Type = NodeType::Boolean;
-      boolean->m_Data.boolean = true;
+      m_AllocatedNodes.push_back(boolean);
+      boolean->type = NodeType::Boolean;
+      boolean->data.boolean = true;
       m_Lexer.skipChars(4);
       return boolean;
     }
@@ -67,7 +69,8 @@ namespace json
     if (peek.rfind("null", 0) == 0)
     {
       Node* null = new Node();
-      null->m_Type = NodeType::Null;
+      m_AllocatedNodes.push_back(null);
+      null->type = NodeType::Null;
       m_Lexer.skipChars(4);
       return null;
     }
@@ -103,10 +106,12 @@ namespace json
         m_Lexer.skipChar();
     }
     Node* result = new Node();
-    result->m_Type = NodeType::Object;
-    result->m_Data.object.length = members.size();
-    result->m_Data.object.values = new JsonMember*[members.size()];
-    std::memcpy(result->m_Data.object.values, members.data(), members.size() * sizeof(Node*));
+    m_AllocatedNodes.push_back(result);
+    result->type = NodeType::Object;
+    result->data.object.length = members.size();
+    result->data.object.values = new JsonMember*[members.size()];
+    m_AllocatedMemberArrays.push_back(result->data.object.values);
+    std::memcpy(result->data.object.values, members.data(), members.size() * sizeof(Node*));
     return result;
   }
 
@@ -123,6 +128,7 @@ namespace json
     m_Lexer.skipChar();
     Node* element = parseElement();
     JsonMember* result = new JsonMember();
+    m_AllocatedMembers.push_back(result);
     result->nameNode = name;
     result->node = element;
     return result;
@@ -142,10 +148,12 @@ namespace json
     }
 
     Node* array = new Node();
-    array->m_Type = NodeType::Array;
-    array->m_Data.array.length = elements.size();
-    array->m_Data.array.values = new Node*[elements.size()];
-    std::memcpy(array->m_Data.array.values, elements.data(), elements.size() * sizeof(Node*));
+    m_AllocatedNodes.push_back(array);
+    array->type = NodeType::Array;
+    array->data.array.length = elements.size();
+    array->data.array.values = new Node*[elements.size()];
+    m_AllocatedNodeArrays.push_back(array->data.array.values);
+    std::memcpy(array->data.array.values, elements.data(), elements.size() * sizeof(Node*));
     if (m_Lexer.peek() != ']')
     {
       error();
@@ -169,6 +177,7 @@ namespace json
       length++;
 
     char* result = new char[length + 1];
+    m_AllocatedCharArrays.push_back(result);
     std::strncpy(result, m_Lexer.c_str(), length);
     result[length] = '\0';
     m_Lexer.skipChars(length);
@@ -180,9 +189,10 @@ namespace json
     }
     m_Lexer.skipChar();
     Node* node = new Node();
-    node->m_Type = NodeType::String;
-    node->m_Data.string.length = length;
-    node->m_Data.string.ptr = result;
+    m_AllocatedNodes.push_back(node);
+    node->type = NodeType::String;
+    node->data.string.length = length;
+    node->data.string.ptr = result;
     return node;
   }
 
@@ -195,14 +205,16 @@ namespace json
     {
       int res = std::stoll(integerPart);
       Node* node = new Node();
-      node->m_Type = NodeType::Integer;
-      node->m_Data.integer = res;
+      m_AllocatedNodes.push_back(node);
+      node->type = NodeType::Integer;
+      node->data.integer = res;
       return node;
     }
     double res = std::stold(integerPart + decimalPart + exponent);
     Node* result = new Node();
-    result->m_Type = NodeType::Double;
-    result->m_Data.dbl = res;
+      m_AllocatedNodes.push_back(result);
+    result->type = NodeType::Double;
+    result->data.dbl = res;
     return result;
   }
 
@@ -276,7 +288,21 @@ namespace json
     std::string res =
       "Unexpected character at " + std::to_string(m_Lexer.getLine()) + ":" + std::to_string(m_Lexer.getColumn()) + "\n";
     if (m_ShouldThrow)
+    {
+      for (auto* node : m_AllocatedNodes)
+        operator delete(node);
+      for (auto* member : m_AllocatedMembers)
+        operator delete(member);
+      for (auto** array : m_AllocatedMemberArrays)
+        delete[] array;
+      for (auto** array : m_AllocatedNodeArrays)
+        delete[] array;
+      for (auto* array : m_AllocatedCharArrays)
+        delete[] array;
+      
+      m_AllocatedNodes.clear();
       throw std::runtime_error(res);
+    }
   }
 
 } // namespace json

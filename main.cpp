@@ -1,3 +1,4 @@
+#include "interpreter.h"
 #include "json.h"
 
 #include <fstream>
@@ -5,25 +6,23 @@
 
 int main(int argc, char** argv)
 {
-  std::ifstream stream;
-  if (argc > 1)
-    stream = std::ifstream(argv[1]);
-  else
-    stream = std::ifstream("test.json");
 
-  std::string str((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+  std::string line;
+  Interpreter interpreter;
 
-  json::Node* result;
-  try
+  while (std::getline(std::cin, line))
   {
-    result = json::JsonParser::Parse(str);
+    if (line.empty())
+      continue;
+    try
+    {
+      interpreter.Process(line);
+    }
+    catch (const std::exception& ex)
+    {
+      std::cerr << ex.what() << std::endl;
+    }
   }
-  catch (const std::exception& ex)
-  {
-    std::cerr << ex.what() << std::endl;
-    return 0;
-  }
-  json::JsonParser::PrettyPrint(std::cout, result);
-  json::JsonParser::CompactPrint(std::cout, result);
+
   return 0;
 }
