@@ -1,0 +1,18 @@
+﻿---
+BasedOnStyle: Microsoft
+ConstructorInitializerIndentWidth: '2'
+ContinuationIndentWidth: '2'
+IndentWidth: '2'
+NamespaceIndentation: All
+ObjCBlockIndentWidth: '2'
+PointerAlignment: Left
+SortIncludes: 'true'
+SortUsingDeclarations: 'true'
+SpaceAfterTemplateKeyword: 'true'
+SpaceBeforeCtorInitializerColon: 'true'
+SpaceBeforeInheritanceColon: 'true'
+SpaceBeforeRangeBasedForLoopColon: 'true'
+TabWidth: '2'
+UseTab: Never
+
+...
