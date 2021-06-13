@@ -13,7 +13,19 @@ namespace json
   class Parser
   {
   public:
+    /**
+     * @brief Construct a new Parser object
+     * 
+     * @param text The json text.
+     * @param shouldThrow Set to false if you want to parse the json partially and want the parser to try and fix unparsable json-s.
+     */
     Parser(const std::string& text, bool shouldThrow = true);
+
+    /**
+     * @brief Parses the current json.
+     * 
+     * @return A Json. 
+     */
     Node* parseJson();
 
   private:
@@ -105,7 +117,14 @@ namespace json
      */
     std::string parseExponent();
 
-    void error();
+    /**
+     * @brief Called whenever an error during parsing occurs. Throws an exeption if m_ShouldThrow is set and clears the
+     * allocated memory.
+     *
+     * @param expected What the parser actually exepcted.
+     * @param got What the parser received.
+     */
+    void error(const std::string& expected, const std::string& got);
 
   private:
     std::vector<Node*> m_AllocatedNodes;

@@ -18,8 +18,12 @@ namespace json
   {
     Node* result = parseElement();
     if (m_Lexer.peek() != -1)
-      error();
-
+      error("EOF", m_Lexer.peekStr(1));
+    m_AllocatedCharArrays.clear();
+    m_AllocatedMemberArrays.clear();
+    m_AllocatedMembers.clear();
+    m_AllocatedNodeArrays.clear();
+    m_AllocatedNodes.clear();
     return result;
   }
 
@@ -75,8 +79,12 @@ namespace json
       return null;
     }
 
-    error();
-    return new Node();
+    error("object/array/string/true/false/number/null", m_Lexer.peekStr(5));
+    Node* empty = new Node();
+    empty->type = NodeType::Object;
+    empty->data.object.length = 0;
+    empty->data.object.values = nullptr;
+    return empty;
   }
 
   Node* Parser::parseObject()
@@ -86,7 +94,7 @@ namespace json
     Node* node = parseMembers();
     if (m_Lexer.peek() != '}')
     {
-      error();
+      error("}", m_Lexer.peekStr(1));
       while (m_Lexer.peek() != -1 && m_Lexer.peek() != '}')
         m_Lexer.skipChar();
     }
@@ -111,7 +119,7 @@ namespace json
     result->data.object.length = members.size();
     result->data.object.values = new JsonMember*[members.size()];
     m_AllocatedMemberArrays.push_back(result->data.object.values);
-    std::memcpy(result->data.object.values, members.data(), members.size() * sizeof(Node*));
+    std::memcpy(result->data.object.values, members.data(), members.size() * sizeof(JsonMember*));
     return result;
   }
 
@@ -121,7 +129,7 @@ namespace json
     Node* name = parseString();
     if (m_Lexer.peek() != ':')
     {
-      error();
+      error(":", m_Lexer.peekStr(1));
       while (m_Lexer.peek() != -1 && m_Lexer.peek() != ':')
         m_Lexer.skipChar();
     }
@@ -156,7 +164,7 @@ namespace json
     std::memcpy(array->data.array.values, elements.data(), elements.size() * sizeof(Node*));
     if (m_Lexer.peek() != ']')
     {
-      error();
+      error("]", m_Lexer.peekStr(1));
       while (m_Lexer.peek() != -1 && m_Lexer.peek() != ']')
         m_Lexer.skipChar();
     }
@@ -168,7 +176,7 @@ namespace json
   {
     char expectedClose;
     if (m_Lexer.peek() != '"' && m_Lexer.peek() != '\'')
-      error();
+      error("\"", m_Lexer.peekStr(1));
     expectedClose = m_Lexer.peek(); // ' or "
     m_Lexer.skipChar();
     uint64_t length = 0;
@@ -183,7 +191,7 @@ namespace json
     m_Lexer.skipChars(length);
     if (m_Lexer.peek() != expectedClose)
     {
-      error();
+      error(std::to_string(expectedClose), m_Lexer.peekStr(1));
       while (m_Lexer.peek() != -1 && m_Lexer.peek() != '}')
         m_Lexer.skipChar();
     }
@@ -212,7 +220,7 @@ namespace json
     }
     double res = std::stold(integerPart + decimalPart + exponent);
     Node* result = new Node();
-      m_AllocatedNodes.push_back(result);
+    m_AllocatedNodes.push_back(result);
     result->type = NodeType::Double;
     result->data.dbl = res;
     return result;
@@ -256,7 +264,7 @@ namespace json
     {
       if (Lexer::IsAlphaNum(m_Lexer.peek()))
       {
-        error();
+        error("e/E", m_Lexer.peekStr(1));
         m_Lexer.skipChar();
       }
       else
@@ -272,7 +280,7 @@ namespace json
     }
     if (m_Lexer.peek() != -1 && !Lexer::IsNumber(m_Lexer.peek()))
     {
-      error();
+      error("0-9", m_Lexer.peekStr(1));
       return std::string();
     }
     while (m_Lexer.peek() != -1 && Lexer::IsNumber(m_Lexer.peek()))
@@ -283,10 +291,11 @@ namespace json
     return result;
   }
 
-  void Parser::error()
+  void Parser::error(const std::string& expected, const std::string& got)
   {
-    std::string res =
-      "Unexpected character at " + std::to_string(m_Lexer.getLine()) + ":" + std::to_string(m_Lexer.getColumn()) + "\n";
+    std::string res = "Unexpected character at " + std::to_string(m_Lexer.getLine()) + ":" +
+                      std::to_string(m_Lexer.getColumn()) + ". Expected \"" + expected + "\" got " +
+                      (got.empty() ? "blank" : got) + ".\n";
     if (m_ShouldThrow)
     {
       for (auto* node : m_AllocatedNodes)
@@ -299,10 +308,15 @@ namespace json
         delete[] array;
       for (auto* array : m_AllocatedCharArrays)
         delete[] array;
-      
+
+      m_AllocatedCharArrays.clear();
+      m_AllocatedMemberArrays.clear();
+      m_AllocatedMembers.clear();
+      m_AllocatedNodeArrays.clear();
       m_AllocatedNodes.clear();
       throw std::runtime_error(res);
     }
+    std::cout << res;
   }
 
 } // namespace json

@@ -107,8 +107,9 @@ namespace json
      *
      * @param path The path of the key.
      * @param json The json to replace the current value with.
+     * @param fullParse Set to false if you want the parser to try and fix the json if it cannot be normally parsed.
      */
-    void edit(const std::string& path, const std::string& json);
+    void edit(const std::string& path, const std::string& json, bool fullParse = true);
 
     /**
      * @brief Creates a new member with a key and a json. The path will be created recursively if it does not exist.
@@ -116,8 +117,9 @@ namespace json
      * @param path The path to the new key.
      * @param key The key of the new member.
      * @param json The json value of the new member.
+     * @param fullParse Set to false if you want the parser to try and fix the json if it cannot be normally parsed.
      */
-    void create(const std::string& path, const std::string& key, const std::string& json);
+    void create(const std::string& path, const std::string& key, const std::string& json, bool fullParse = true);
 
     /**
      * @brief Removes a key from the json. Throws if the path is incorrect.
@@ -174,6 +176,8 @@ namespace json
     {
       delete nameNode;
       delete node;
+      node = nullptr;
+      nameNode = nullptr;
     }
 
     Node* nameNode = nullptr;
@@ -228,7 +232,7 @@ namespace json
 
   public:
     /**
-     * @brief Outputs the json in a a as compact way as possible to std::cout.
+     * @brief Outputs the json in a as compact way as possible to std::cout.
      *
      * @param json Json to print.
      */

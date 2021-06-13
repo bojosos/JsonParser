@@ -1,7 +1,5 @@
 #include "interpreter.h"
-#include "json.h"
 
-#include <fstream>
 #include <iostream>
 
 int main(int argc, char** argv)
@@ -10,17 +8,18 @@ int main(int argc, char** argv)
   std::string line;
   Interpreter interpreter;
 
+  Interpreter::ShowHelp();
   while (std::getline(std::cin, line))
   {
     if (line.empty())
       continue;
     try
     {
-      interpreter.Process(line);
+      interpreter.process(line);
     }
     catch (const std::exception& ex)
     {
-      std::cerr << ex.what() << std::endl;
+      std::cerr << "Error: " << ex.what() << std::endl;
     }
   }
 

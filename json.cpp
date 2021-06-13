@@ -41,28 +41,20 @@ namespace json
         return output;
       }
       output << "{";
-      if (json->data.object.length > 1)
-        output << std::endl;
+      output << std::endl;
       for (uint32_t i = 0; i < json->data.object.length; i++)
       {
-        if (json->data.object.length > 1)
-          for (uint32_t i = 0; i < indent; i++)
-            output << " ";
-        else
-          std::cout << " ";
+        for (uint32_t i = 0; i < indent; i++)
+          output << " ";
 
         output << "\"" << json->data.object.values[i]->nameNode->data.string.ptr << "\": ";
         PrettyPrintUtil(output, json->data.object.values[i]->node, indent + 2);
         if (i != json->data.array.length - 1)
           output << ",";
-        if (json->data.object.length > 1)
-          output << std::endl;
+        output << std::endl;
       }
-      if (json->data.object.length > 1)
-        for (uint32_t i = 0; i < indent - 2; i++)
-          output << " ";
-      else
-        std::cout << " ";
+      for (uint32_t i = 0; i < indent - 2; i++)
+        output << " ";
       output << "}";
       break;
     case NodeType::Array:
@@ -71,7 +63,7 @@ namespace json
       {
         PrettyPrintUtil(output, json->data.array.values[i], indent);
         if (i != json->data.array.length - 1)
-          output << ", " << std::endl;
+          output << ", ";
       }
       output << " ]";
       break;
@@ -162,13 +154,12 @@ namespace json
       {
         if (!std::strcmp(node.data.object.values[i]->nameNode->data.string.ptr, key))
         {
-          Node* value = new Node(*node.data.object.values[i]->node); // copy so we preserve after file close
           Node* obj = new Node();
           obj->type = NodeType::Object;
           obj->data.object.length = 1;
           obj->data.object.values = new JsonMember*[1];
-          obj->data.object.values[0] =
-            new JsonMember(new Node(*node.data.object.values[i]->nameNode), new Node(*value));
+          obj->data.object.values[0] = new JsonMember(new Node(*node.data.object.values[i]->nameNode),
+                                                      new Node(*node.data.object.values[i]->node));
           output.push_back(obj);
         }
         searchUtil(key, *node.data.object.values[i]->node, output);
@@ -188,16 +179,20 @@ namespace json
       for (uint32_t i = 0; i < data.array.length; i++)
         delete data.array.values[i];
       delete[] data.array.values;
+      data.array.values = nullptr;
       break;
     case (NodeType::Object):
       for (uint32_t i = 0; i < data.object.length; i++)
         delete data.object.values[i];
       delete[] data.object.values;
+      data.object.values = nullptr;
       break;
     case (NodeType::String):
       delete[] data.string.ptr;
+      data.string.ptr = nullptr;
       break;
     }
+    type = NodeType::None;
   }
 
   Node::Node(const Node& other)
@@ -252,37 +247,31 @@ namespace json
 
   void Node::remove(const std::string& path)
   {
-    auto paths = Utils::SplitString(path);
+    auto paths = Utils::SplitString(path, "/");
     if (paths.size() == 0)
       throw std::runtime_error("Invalid args.");
     Node* c = this;
     Node* p = this;
-    try
+    for (auto& path : paths)
     {
-      for (auto& path : paths)
-      {
-        p = c;
-        c = &(*c)[path];
-      }
+      p = c;
+      c = &(*c)[path];
+    }
 
-      Node& prev = *p;
-      JsonMember** copy = new JsonMember*[prev.data.object.length - 1];
-      uint32_t copyIdx = 0;
-      for (std::size_t i = 0; i < prev.data.object.length; i++)
-      {
-        if (std::strcmp(prev.data.object.values[i]->nameNode->data.string.ptr,
-                        paths[paths.size() - 1].c_str())) // do not match
-          copy[copyIdx++] = prev.data.object.values[i];
-        else
-          delete prev.data.object.values[i];
-      }
-      prev.data.object.length--;
-      prev.data.object.values = copy;
-    }
-    catch (const std::exception& ex)
+    Node& prev = *p;
+    JsonMember** copy = new JsonMember*[prev.data.object.length - 1];
+    uint32_t copyIdx = 0;
+    for (std::size_t i = 0; i < prev.data.object.length; i++)
     {
-      throw;
+      if (std::strcmp(prev.data.object.values[i]->nameNode->data.string.ptr,
+                      paths[paths.size() - 1].c_str())) // do not match
+        copy[copyIdx++] = prev.data.object.values[i];
+      else
+        delete prev.data.object.values[i];
     }
+    delete[] prev.data.object.values;
+    prev.data.object.length = copyIdx;
+    prev.data.object.values = copy;
   }
 
   void Node::move(const std::string& from, const std::string& to)
@@ -312,7 +301,7 @@ namespace json
         c = &(*c)[path];
       }
       Node& prev = *c;
-      if (pFrom->type != NodeType::Object || pTo->type != NodeType::Object)
+      if (pFrom->type != NodeType::Object || c->type != NodeType::Object)
         throw std::runtime_error("Can only move from object to object.");
 
       JsonMember** copy = new JsonMember*[c->data.object.length + pFrom->data.object.length];
@@ -323,6 +312,7 @@ namespace json
       delete[] c->data.object.values;
       c->data.object.values = copy;
       c->data.object.length = c->data.object.length + pFrom->data.object.length;
+      delete[] pFrom->data.object.values;
       pFrom->data.object.values = nullptr;
       pFrom->data.object.length = 0;
     }
@@ -332,12 +322,12 @@ namespace json
     }
   }
 
-  void Node::edit(const std::string& path, const std::string& text)
+  void Node::edit(const std::string& path, const std::string& text, bool fullParse)
   {
     Node* parsedJson = nullptr;
+    parsedJson = fullParse ? JsonParser::Parse(text) : JsonParser::ParsePartially(text);
     try
     {
-      parsedJson = JsonParser::Parse(text);
       auto paths = Utils::SplitString(path, "/");
       if (paths.size() == 0)
         throw std::runtime_error("Invalid args.");
@@ -357,19 +347,19 @@ namespace json
         }
       }
     }
-    catch (const std ::exception& ex)
+    catch (const std::exception& ex)
     {
-     // JsonParser::JsonFree(parsedJson);
+      // JsonParser::JsonFree(parsedJson);
       throw;
     }
   }
 
-  void Node::create(const std::string& path, const std::string& key, const std::string& text)
+  void Node::create(const std::string& path, const std::string& key, const std::string& text, bool fullParse)
   {
     Node* parsedJson = nullptr;
+    parsedJson = fullParse ? JsonParser::Parse(text) : JsonParser::ParsePartially(text);
     try
     {
-      parsedJson = JsonParser::Parse(text);
       auto paths = Utils::SplitString(path, "/");
       if (paths.size() == 0)
         throw std::runtime_error("Invalid args.");
@@ -423,9 +413,9 @@ namespace json
       current->data.object.values[current->data.object.length]->node = parsedJson;
       current->data.object.length++;
     }
-    catch (const std ::exception& ex)
+    catch (const std::exception& ex)
     {
-     // JsonParser::JsonFree(parsedJson);
+      // JsonParser::JsonFree(parsedJson);
       throw;
     }
   }

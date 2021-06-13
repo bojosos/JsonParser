@@ -7,14 +7,19 @@
 #include <fstream>
 #include <iostream>
 
-void Interpreter::ProcessPrint(const std::string& line, const std::vector<std::string>& args)
+Interpreter::~Interpreter()
+{
+  json::JsonParser::JsonFree(m_Json);
+}
+
+void Interpreter::processPrint(const std::string& line, const std::vector<std::string>& args)
 {
   if (m_Json == nullptr)
     throw std::runtime_error("No document open.");
   json::JsonParser::PrettyPrint(m_Json);
 }
 
-void Interpreter::ProcessSave(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processSave(const std::string& line, const std::vector<std::string>& args)
 {
   if (m_Json == nullptr)
     throw std::runtime_error("No document open.");
@@ -27,13 +32,16 @@ void Interpreter::ProcessSave(const std::string& line, const std::vector<std::st
   {
     std::ofstream output(m_Filepath);
     if (output.is_open())
+    {
       json::JsonParser::PrettyPrint(m_Json, output);
+      output.close();
+    }
   }
   m_Saved = true;
   std::cout << "File saved to " << m_Filepath << "." << std::endl;
 }
 
-void Interpreter::ProcessSaveAs(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processSaveAs(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 2)
     throw std::runtime_error("Invalid args.");
@@ -52,15 +60,19 @@ void Interpreter::ProcessSaveAs(const std::string& line, const std::vector<std::
   {
     std::ofstream output(resultArg);
     if (output.is_open())
+    {
       json::JsonParser::PrettyPrint(m_Json, output);
+      output.close();
+    }
   }
   else
     throw std::runtime_error("No document open.");
   m_Saved = true;
-  std::cout << "Filed saved to " << resultArg << "." << std::endl;
+  m_Filepath = resultArg;
+  throw std::runtime_error("Failed to save " + resultArg + ".");
 }
 
-void Interpreter::ProcessClose(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processClose(const std::string& line, const std::vector<std::string>& args)
 {
   if (!m_Saved)
   {
@@ -68,7 +80,7 @@ void Interpreter::ProcessClose(const std::string& line, const std::vector<std::s
     char c;
     std::cin >> c;
     if (c == 'y')
-      ProcessSave(line, args);
+      processSave(line, args);
   }
   json::JsonParser::JsonFree(m_Json);
   m_Json = nullptr;
@@ -77,7 +89,7 @@ void Interpreter::ProcessClose(const std::string& line, const std::vector<std::s
   std::cout << "File closed." << std::endl;
 }
 
-void Interpreter::ProcessNew(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processNew(const std::string& line, const std::vector<std::string>& args)
 {
   m_Json = json::JsonParser::Parse("{}");
   m_Saved = false;
@@ -85,7 +97,7 @@ void Interpreter::ProcessNew(const std::string& line, const std::vector<std::str
   std::cout << "Empty document created." << std::endl;
 }
 
-void Interpreter::ProcessOpen(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processOpen(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 2)
     throw std::runtime_error("Invalid args.");
@@ -104,7 +116,7 @@ void Interpreter::ProcessOpen(const std::string& line, const std::vector<std::st
   if (input.is_open())
   {
     std::string str((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    m_Json = json::JsonParser::Parse(str);
+    m_Json = m_FullParse ? json::JsonParser::Parse(str) : json::JsonParser::ParsePartially(str);
     m_Filepath = resultArg;
     json::JsonParser::PrettyPrint(m_Json);
   }
@@ -113,7 +125,7 @@ void Interpreter::ProcessOpen(const std::string& line, const std::vector<std::st
   m_Saved = true;
 }
 
-void Interpreter::ProcessSearch(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processSearch(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 2)
     throw std::runtime_error("Invalid args.");
@@ -123,9 +135,10 @@ void Interpreter::ProcessSearch(const std::string& line, const std::vector<std::
 
   json::Json array = m_Json->search(args[1]);
   json::JsonParser::PrettyPrint(array);
+  json::JsonParser::JsonFree(array);
 }
 
-void Interpreter::ProcessRemove(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processRemove(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 2)
     throw std::runtime_error("Invaild args");
@@ -145,7 +158,7 @@ void Interpreter::ProcessRemove(const std::string& line, const std::vector<std::
   m_Saved = false;
 }
 
-void Interpreter::ProcessMove(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processMove(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 3)
     throw std::runtime_error("Invaild args.");
@@ -157,7 +170,7 @@ void Interpreter::ProcessMove(const std::string& line, const std::vector<std::st
   m_Saved = false;
 }
 
-void Interpreter::ProcessEdit(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processEdit(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 3)
     throw std::runtime_error("Invaild args");
@@ -167,11 +180,11 @@ void Interpreter::ProcessEdit(const std::string& line, const std::vector<std::st
   std::string json =
     line.substr(args[0].size() + 1 + args[1].size() + 1, line.size() - args[0].size() - 1 - args[1].size() - 1);
 
-  m_Json->edit(path, json);
+  m_Json->edit(path, json, m_FullParse);
   std::cout << "Value editted." << std::endl;
   m_Saved = false;
 }
-void Interpreter::ProcessCreate(const std::string& line, const std::vector<std::string>& args)
+void Interpreter::processCreate(const std::string& line, const std::vector<std::string>& args)
 {
   if (args.size() < 4)
     throw std::runtime_error("Invaild args");
@@ -182,12 +195,110 @@ void Interpreter::ProcessCreate(const std::string& line, const std::vector<std::
   std::string json = line.substr(args[0].size() + 1 + args[1].size() + 1 + args[2].size() + 1,
                                  line.size() - args[0].size() - 1 - args[1].size() - 1 - args[2].size());
 
-  m_Json->create(path, key, json);
+  m_Json->create(path, key, json, m_FullParse);
   std::cout << "Member created." << std::endl;
   m_Saved = false;
 }
 
-void Interpreter::ProcessExit()
+void Interpreter::processSetMode(const std::string& line, const std::vector<std::string>& args)
+{
+  if (args.size() < 2)
+    throw std::runtime_error("Invaild args");
+  if (args[1] == "partial")
+  {
+    std::cout << "Mode set to partial." << std::endl;
+    m_FullParse = false;
+  }
+  else if (args[1] == "full")
+  {
+    std::cout << "Mode set to full." << std::endl;
+    m_FullParse = true;
+  }
+  else
+    throw std::runtime_error("Invalid mode.");
+}
+
+void Interpreter::processSaveSearch(const std::string& line, const std::vector<std::string>& args)
+{
+  if (args.size() < 3)
+    throw std::runtime_error("Invaild args");
+  if (!m_Json)
+    throw std::runtime_error("No document open.");
+
+  std::ofstream output(args[2]);
+  if (output.is_open())
+  {
+    json::Json array = m_Json->search(args[1]);
+    if (array->getSize() == 0)
+      throw std::runtime_error("Key not found");
+    else if (array->getSize() == 1)
+      json::JsonParser::PrettyPrint(array->data.array.values[0], output);
+    else
+      json::JsonParser::PrettyPrint(array, output);
+    json::JsonParser::JsonFree(array);
+    output.close();
+    std::cout << "Search result saved to " << args[2] << "." << std::endl;
+  }
+  else
+    throw std::runtime_error("Invalid path.");
+}
+
+void Interpreter::processSaveCompact(const std::string& line, const std::vector<std::string>& args)
+{
+  if (args.size() < 2)
+    throw std::runtime_error("Invalid args.");
+  std::string path = line.substr(args[0].size() + 1, line.size() - args[0].size()); // cut out command + first space
+
+  std::string resultArg;
+  if (path[0] == '"') //
+  {
+    uint32_t idx = 0;
+    while (path[idx + 1] != '"')
+      resultArg += path[idx++];
+  }
+  else
+    resultArg = args[1];
+  if (m_Json != nullptr)
+  {
+    std::ofstream output(resultArg);
+    if (output.is_open())
+    {
+      json::JsonParser::CompactPrint(m_Json, output);
+      output.close();
+    }
+  }
+  else
+    throw std::runtime_error("No document open.");
+  m_Saved = true;
+  std::cout << "Search result saved to " << args[1] << "." << std::endl;
+}
+
+void Interpreter::processSaveSearchCompact(const std::string& line, const std::vector<std::string>& args)
+{
+  if (args.size() < 3)
+    throw std::runtime_error("Invaild args");
+  if (!m_Json)
+    throw std::runtime_error("No document open.");
+
+  std::ofstream output(args[2]);
+  if (output.is_open())
+  {
+    json::Json array = m_Json->search(args[1]);
+    if (array->getSize() == 0)
+      throw std::runtime_error("Key not found");
+    else if (array->getSize() == 1)
+      json::JsonParser::CompactPrint(array->data.array.values[0], output);
+    else
+      json::JsonParser::CompactPrint(array, output);
+    json::JsonParser::JsonFree(array);
+    std::cout << "Search result saved to " << args[2] << "." << std::endl;
+    output.close();
+  }
+  else
+    throw std::runtime_error("Invalid path.");
+}
+
+void Interpreter::processExit()
 {
   if (m_Json)
   {
@@ -197,7 +308,7 @@ void Interpreter::ProcessExit()
       char ans;
       std::cin >> ans;
       if (ans == 'y')
-        ProcessSave("", {});
+        processSave("", {});
       else
         json::JsonParser::JsonFree(m_Json);
     }
@@ -208,47 +319,72 @@ void Interpreter::ProcessExit()
 
 void Interpreter::ShowHelp()
 {
-  std::cout << "VEHICLE <registration> <description>" << '\n'
-            << "PERSON <name> <id>" << '\n'
-            << "ACQUIRE <owner-id> <vehicle-id>" << '\n'
-            << "RELEASE <owner-id> <vehicle-id>" << '\n'
-            << "REMOVE <what>" << '\n'
-            << "SAVE <path>" << '\n'
-            << "SHOW [PEOPLE|VEHICLES|<id>" << std::endl;
+  std::cout
+    << "new                                 Create an empty document." << '\n'
+    << "open <filepath>                     Open a document." << '\n'
+    << "print                               Print the open document." << '\n'
+    << "mode <mode>                         Sets the parsing mode of the program. Possible values are \"partial\" "
+       "and \"full\""
+    << '\n'
+    << "                                    In partial mode the program will attempt to fix the json before "
+       "executing a command."
+    << '\n'
+    << "                                    In full mode the programm will not execute the command if the json "
+       "cannot be parsed."
+    << '\n'
+    << "save                                Save the open document." << '\n'
+    << "saveas <filepath>                   Save the open document to another path." << '\n'
+    << "savecompact <filepath>              Saves the document compactly to the filepath." << '\n'
+    << "savesearchcompact <key> <filepath>  Saves the search compactly to the filepath." << '\n'
+    << "savesearch <key> <filepath>         Saves the search result to the file." << '\n'
+    << "close                               Close the open document." << '\n'
+    << "move <path1> <path2>                Move the elements of path1 to path2." << '\n'
+    << "remove <path>                       Remove the element at path." << '\n'
+    << "edit <path> <json>                  Set the value of the element at path to the parsed json." << '\n'
+    << "create <path> <key> <json>          Creates a new entry at path with the key and parsed json." << '\n'
+    << "search <key>                        Searches for an element and prints the result as a json array." << '\n';
 }
 
-void Interpreter::Process(const std::string& line)
+void Interpreter::process(const std::string& line)
 {
   auto args = Utils::SplitString(line, " ");
   std::string& command = args[0];
   std::transform(command.begin(), command.end(), command.begin(), ::tolower);
 
   if (command == "print")
-    ProcessPrint(line, args);
+    processPrint(line, args);
   else if (command == "new")
-    ProcessNew(line, args);
+    processNew(line, args);
   else if (command == "open")
-    ProcessOpen(line, args);
+    processOpen(line, args);
   else if (command == "close")
-    ProcessClose(line, args);
+    processClose(line, args);
   else if (command == "save")
-    ProcessSave(line, args);
+    processSave(line, args);
   else if (command == "saveas")
-    ProcessSaveAs(line, args);
+    processSaveAs(line, args);
+  else if (command == "savesearch")
+    processSaveSearch(line, args);
+  else if (command == "savecompact")
+    processSaveCompact(line, args);
+  else if (command == "savesearchcompact")
+    processSaveSearchCompact(line, args);
+  else if (command == "mode")
+    processSetMode(line, args);
   else if (command == "remove")
-    ProcessRemove(line, args);
+    processRemove(line, args);
   else if (command == "move")
-    ProcessMove(line, args);
+    processMove(line, args);
   else if (command == "search")
-    ProcessSearch(line, args);
+    processSearch(line, args);
   else if (command == "edit")
-    ProcessEdit(line, args);
+    processEdit(line, args);
   else if (command == "create")
-    ProcessCreate(line, args);
+    processCreate(line, args);
   else if (command == "exit")
-    ProcessExit();
+    processExit();
   else if (command == "help")
     ShowHelp();
   else
-    throw std::runtime_error("Invalid command");
+    throw std::runtime_error("Invalid command.");
 }

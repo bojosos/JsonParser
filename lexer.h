@@ -27,6 +27,8 @@ namespace json
     }
     std::string peekStr(uint64_t charCount)
     {
+      if (m_Idx + 1 > m_Text.size())
+        return "";
       if (std::min(charCount, m_Text.size() - m_Idx - 1) < 0)
         return "";
       return m_Text.substr(m_Idx, std::min(charCount, m_Text.size() - m_Idx));
